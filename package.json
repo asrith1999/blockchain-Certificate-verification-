@@ -1,0 +1,15 @@
+{
+  "name": "cert-blockchain",
+  "version": "1.0.0",
+  "description": "Offline blockchain-backed certificate issuance & verification (local)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "body-parser": "^1.20.2",
+    "crypto-js": "^4.1.1",
+    "cors": "^2.8.5"
+  }
+}

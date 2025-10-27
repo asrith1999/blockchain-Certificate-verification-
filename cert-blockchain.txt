@@ -1,0 +1,10 @@
+cert-blockchain/
+├─ package.json
+├─ server.js
+├─ blockchain.js
+├─ chain.json            # persisted chain (auto-created)
+├─ certificates.json     # persisted certificates (auto-created)
+└─ public/
+   ├─ index.html
+   ├─ app.js
+   └─ styles.css
