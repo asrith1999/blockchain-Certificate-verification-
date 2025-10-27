@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>CertChain — Offline Certificate Verification</title>
+  <!-- Tailwind CDN (optional; remove if fully offline) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body class="bg-gradient-to-r from-sky-50 to-white min-h-screen text-slate-800">
+  <div class="max-w-5xl mx-auto p-6">
+    <header class="flex items-center justify-between mb-8">
+      <div>
+        <h1 class="text-3xl font-bold">CertChain</h1>
+        <p class="text-sm text-slate-600">Blockchain-backed certificate issuance & verification (local)</p>
+      </div>
+      <div class="space-x-2">
+        <button id="btn-issue" class="px-4 py-2 bg-indigo-600 text-white rounded shadow">Issue Certificate</button>
+        <button id="btn-verify" class="px-4 py-2 border border-indigo-600 text-indigo-600 rounded">Verify</button>
+      </div>
+    </header>
+
+    <main>
+      <!-- Issue Form -->
+      <section id="issue-section" class="bg-white p-6 rounded-lg shadow-md">
+        <h2 class="text-xl font-semibold mb-4">Issue Certificate</h2>
+        <form id="issue-form" class="grid grid-cols-1 gap-4">
+          <input id="recipient" placeholder="Recipient full name" class="p-3 border rounded" />
+          <input id="course" placeholder="Course / Program" class="p-3 border rounded" />
+          <input id="grade" placeholder="Grade (optional)" class="p-3 border rounded" />
+          <input id="issuer" placeholder="Issuer (e.g., University XYZ)" class="p-3 border rounded" />
+          <input id="dateIssued" type="date" class="p-3 border rounded" placeholder="Date Issued" title="Date Issued" />
+          <div class="flex gap-3">
+            <button type="submit" class="px-4 py-2 bg-green-600 text-white rounded">Issue & Record</button>
+            <button id="clear-issue" type="button" class="px-4 py-2 border rounded">Clear</button>
+          </div>
+          <div id="issue-result" class="mt-3"></div>
+        </form>
+      </section>
+
+      <!-- Verify Form -->
+      <section id="verify-section" class="mt-8 hidden bg-white p-6 rounded-lg shadow-md">
+        <h2 class="text-xl font-semibold mb-4">Verify Certificate</h2>
+        <div class="flex gap-3">
+          <input id="verify-id" placeholder="Enter Certificate ID" class="p-3 border rounded flex-1" />
+          <button id="verify-btn" class="px-4 py-2 bg-indigo-600 text-white rounded">Verify</button>
+        </div>
+        <div id="verify-result" class="mt-4"></div>
+      </section>
+
+      <!-- All certificates -->
+      <section id="list-section" class="mt-8 hidden bg-white p-6 rounded-lg shadow-md">
+        <h2 class="text-xl font-semibold mb-4">All Certificates (Admin)</h2>
+        <div id="cert-list"></div>
+      </section>
+    </main>
+
+    <footer class="mt-8 text-sm text-slate-500">
+      Tip: Issue a certificate, copy the Certificate ID and try Verify. This runs entirely on your local machine.
+    </footer>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
