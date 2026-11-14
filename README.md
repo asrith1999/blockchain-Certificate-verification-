@@ -58,13 +58,35 @@ docker compose up --build -d
 It serves http://localhost:3000 and keeps the chain in `certificate_data`.
 For a public Docker host, mount persistent storage at `/data`, use **one
 replica / one writer**, configure HTTPS at the host, and health-check `/health`.
-Back up `/data/chain.json`. Do not use a stateless function host with this
-filesystem implementation; temporary filesystems lose records. A hosted
-database adapter would be required for serverless deployment.
+Back up `/data/chain.json`. Local-file mode requires persistent disk and one
+writer. The Vercel adapter below stores the same chain format in private
+object storage and uses conditional writes across function instances.
 
-Deployment configuration is included. A live provider deployment has to
-succeed before the project has a public hosting URL; none is assumed here.
 Docker build verification requires Docker.
+
+## Vercel hosting with persistent private storage
+
+`api/index.js` uses `BlobLedger` instead of writing the function's temporary
+filesystem. Create a private Vercel Blob store connected to this project and
+set a strong **production-only** `ADMIN_TOKEN` in Vercel environment settings.
+The store connection supplies `BLOB_READ_WRITE_TOKEN`, or an OIDC connection
+can supply `BLOB_STORE_ID`. Keep storage credentials on the server.
+
+Deploy with Node.js 24, the root directory, `npm ci --omit=dev`, no build
+command, and the committed `vercel.json`. It routes the UI and API through one
+Node function. The Vercel account does not need a GitHub connection when
+deploying source files directly; automatic Git deployment does require one.
+
+Private reads bypass the object cache so new records are visible immediately.
+Writes use the previous object's ETag to reject a concurrent overwrite, then
+read the latest chain and retry a bounded number of times. Corrupted chains
+are rejected. The original local-file mode remains available with `npm start`.
+
+This learning registry has a 2 MB chain-file limit. Each issuance reads and
+rewrites that file; use a transactional database for a large registry. Keep
+production storage and keys out of preview environments. Use a separate store
+and issuer key if you later enable preview deployments. A newly provisioned
+hosted registry starts empty; local records are not uploaded automatically.
 
 ## API
 
@@ -91,7 +113,9 @@ npm run check
 npm test
 ```
 
-Tests run a real loopback HTTP server with temporary storage and cover static
-assets, issuer authorization, date validation, issue/verify, persistence after
-reopening the app, and tamper detection. They do not replace real-browser QA
-or a hosted persistent-volume acceptance check.
+Tests run real loopback HTTP servers and cover static assets, issuer
+authorization, date validation, issue/verify, local restart persistence, and
+tamper detection. Object-store contract tests also cover separate app
+instances, concurrent initial issuance and updates, private uncached reads,
+capacity limits and rejection of corrupted remote data. They use an isolated
+object-store fixture; validate the real provisioned store after deployment.

@@ -29,16 +29,36 @@ class Block {
 }
 
 class Blockchain {
-  constructor({ dataDir = __dirname } = {}) {
-    fs.mkdirSync(dataDir, { recursive: true });
-    this.chainFile = path.join(dataDir, 'chain.json');
+  constructor({ dataDir = __dirname, persist = true } = {}) {
+    this.chainFile = persist ? path.join(dataDir, 'chain.json') : null;
+    if (persist) fs.mkdirSync(dataDir, { recursive: true });
     this.difficulty = 3; // keep small for local usage
     this.chain = [];
-    this.loadChain();
+    if (persist) this.loadChain();
     if (this.chain.length === 0) {
       this.createGenesisBlock();
     }
     if (!this.isChainValid()) throw new Error('Stored chain is invalid. Restore a trusted backup before starting.');
+  }
+
+  static fromRecords(records) {
+    if (!Array.isArray(records) || records.length === 0) throw new Error('Stored chain is empty or malformed.');
+    const chain = Object.create(Blockchain.prototype);
+    chain.difficulty = 3;
+    chain.chainFile = null;
+    chain.chain = records.map(record => {
+      if (!record || !Number.isInteger(record.index) || typeof record.timestamp !== 'string' ||
+          typeof record.previousHash !== 'string' || !Number.isSafeInteger(record.nonce) || record.nonce < 0 ||
+          typeof record.hash !== 'string' || !/^[a-f0-9]{64}$/.test(record.hash)) {
+        throw new Error('Stored chain contains a malformed block.');
+      }
+      const block = new Block(record.index, record.timestamp, record.data, record.previousHash);
+      block.nonce = record.nonce;
+      block.hash = record.hash;
+      return block;
+    });
+    if (!chain.isChainValid()) throw new Error('Stored chain is invalid. Restore a trusted backup before starting.');
+    return chain;
   }
 
   createGenesisBlock() {
@@ -81,6 +101,7 @@ class Blockchain {
   }
 
   saveChain() {
+    if (!this.chainFile) return;
     const temporary = this.chainFile + '.tmp';
     fs.writeFileSync(temporary, JSON.stringify(this.chain, null, 2), { encoding: 'utf8', mode: 0o600 });
     fs.renameSync(temporary, this.chainFile);
@@ -91,14 +112,7 @@ class Blockchain {
       if (fs.existsSync(this.chainFile)) {
         const raw = fs.readFileSync(this.chainFile, 'utf8');
         const parsed = JSON.parse(raw);
-        if (!Array.isArray(parsed) || parsed.length === 0) throw new Error('Stored chain is empty or malformed.');
-        // restore Block prototypes
-        this.chain = parsed.map(b => {
-          const block = new Block(b.index, b.timestamp, b.data, b.previousHash);
-          block.nonce = b.nonce;
-          block.hash = b.hash;
-          return block;
-        });
+        this.chain = Blockchain.fromRecords(parsed).chain;
       } else {
         this.chain = [];
       }

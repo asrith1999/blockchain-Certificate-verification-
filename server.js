@@ -3,9 +3,11 @@ const path = require('node:path');
 const { randomBytes, createHash, timingSafeEqual } = require('node:crypto');
 const { Block, Blockchain } = require('./blockchain');
 
-function createApp({ dataDir = process.env.DATA_DIR || __dirname, adminToken = process.env.ADMIN_TOKEN } = {}) {
+function createApp({ dataDir = process.env.DATA_DIR || __dirname, adminToken = process.env.ADMIN_TOKEN, ledger = null } = {}) {
   if (!adminToken || adminToken.length < 20) throw new Error('ADMIN_TOKEN must contain at least 20 characters.');
-  const chain = new Blockchain({ dataDir });
+  const localChain = ledger ? null : new Blockchain({ dataDir });
+  const readChain = () => ledger ? ledger.read() : Promise.resolve(localChain);
+  const route = handler => (req, res, next) => Promise.resolve(handler(req, res)).catch(next);
   const app = express();
   app.disable('x-powered-by');
   app.use(express.json({ limit: '16kb' }));
@@ -26,15 +28,22 @@ function createApp({ dataDir = process.env.DATA_DIR || __dirname, adminToken = p
     next();
   }
 
-  app.get('/health', (req, res) => res.json({ ok: true, validChain: chain.isChainValid() }));
+  app.get('/health', route(async (req, res) => {
+    const chain = await readChain();
+    res.json({ ok: true, validChain: chain.isChainValid(), storage: ledger ? 'vercel-private-blob' : 'local-file' });
+  }));
   app.get('/api/session', admin, (req, res) => res.json({ success: true }));
-  app.get('/api/certificates', admin, (req, res) => {
+  app.get('/api/certificates', admin, route(async (req, res) => {
+    const chain = await readChain();
     const certificates = chain.chain.slice(1).map(block => block.data.certificate).filter(Boolean);
     res.json({ certificates, count: certificates.length });
-  });
-  app.get('/api/chain', admin, (req, res) => res.json({ chain: chain.chain, valid: chain.isChainValid() }));
+  }));
+  app.get('/api/chain', admin, route(async (req, res) => {
+    const chain = await readChain();
+    res.json({ chain: chain.chain, valid: chain.isChainValid() });
+  }));
 
-  app.post('/api/issue', admin, (req, res) => {
+  app.post('/api/issue', admin, route(async (req, res) => {
     const input = req.body || {};
     const cert = {};
     for (const field of ['recipient', 'course', 'issuer', 'dateIssued']) {
@@ -53,21 +62,29 @@ function createApp({ dataDir = process.env.DATA_DIR || __dirname, adminToken = p
     cert.grade = (input.grade || '').trim();
     cert.id = randomBytes(12).toString('hex');
     cert.issuedAt = new Date().toISOString();
-    const block = new Block(chain.chain.length, cert.issuedAt, { certificate: cert }, chain.getLatestBlock().hash);
-    chain.addBlock(block);
+    let block;
+    if (ledger) {
+      block = await ledger.issue(cert);
+    } else {
+      block = new Block(localChain.chain.length, cert.issuedAt, { certificate: cert }, localChain.getLatestBlock().hash);
+      localChain.addBlock(block);
+    }
     res.status(201).json({ success: true, certificate: cert, blockHash: block.hash });
-  });
+  }));
 
-  app.get('/api/verify/:id', (req, res) => {
+  app.get('/api/verify/:id', route(async (req, res) => {
+    const chain = await readChain();
     const block = chain.chain.find(b => b.data?.certificate?.id === req.params.id);
     if (!block) return res.json({ found: false });
     const { index, timestamp, hash, previousHash, nonce } = block;
     res.json({ found: true, certificate: block.data.certificate, block: { index, timestamp, hash, previousHash, nonce }, validChain: chain.isChainValid() });
-  });
+  }));
 
   app.use(express.static(path.join(__dirname, 'public')));
   app.use('/api', (req, res) => res.status(404).json({ error: 'API route not found.' }));
   app.use((error, req, res, next) => {
+    if (error.code === 'REGISTRY_CONFLICT') return res.status(409).json({ error: 'The registry changed while saving. Please try again.' });
+    if (error.code === 'REGISTRY_FULL') return res.status(507).json({ error: 'This learning registry has reached its 2 MB limit. Export and archive it before continuing.' });
     if (error.type === 'entity.parse.failed') return res.status(400).json({ error: 'Invalid JSON request.' });
     if (error.type === 'entity.too.large') return res.status(413).json({ error: 'Request is too large.' });
     console.error(error.message);

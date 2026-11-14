@@ -1,0 +1,10 @@
+.git
+.env
+.env.*
+!.env.example
+node_modules
+data
+chain.json
+chain.json.tmp
+certificates.json
+tests
