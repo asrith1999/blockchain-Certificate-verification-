@@ -1,0 +1,12 @@
+services:
+  app:
+    build: .
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      ADMIN_TOKEN: ${ADMIN_TOKEN:?Set a unique ADMIN_TOKEN in .env}
+    volumes:
+      - certificate_data:/data
+    restart: unless-stopped
+volumes:
+  certificate_data:
