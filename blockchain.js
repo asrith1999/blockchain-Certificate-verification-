@@ -1,9 +1,7 @@
 // blockchain.js
 const fs = require('fs');
 const path = require('path');
-const CryptoJS = require('crypto-js');
-
-const CHAIN_FILE = path.join(__dirname, 'chain.json');
+const { createHash } = require('node:crypto');
 
 class Block {
   constructor(index, timestamp, data, previousHash = '') {
@@ -16,9 +14,9 @@ class Block {
   }
 
   calculateHash() {
-    return CryptoJS.SHA256(
+    return createHash('sha256').update(
       this.index + this.timestamp + JSON.stringify(this.data) + this.previousHash + this.nonce
-    ).toString();
+    ).digest('hex');
   }
 
   mineBlock(difficulty) {
@@ -31,13 +29,36 @@ class Block {
 }
 
 class Blockchain {
-  constructor() {
+  constructor({ dataDir = __dirname, persist = true } = {}) {
+    this.chainFile = persist ? path.join(dataDir, 'chain.json') : null;
+    if (persist) fs.mkdirSync(dataDir, { recursive: true });
     this.difficulty = 3; // keep small for local usage
     this.chain = [];
-    this.loadChain();
+    if (persist) this.loadChain();
     if (this.chain.length === 0) {
       this.createGenesisBlock();
     }
+    if (!this.isChainValid()) throw new Error('Stored chain is invalid. Restore a trusted backup before starting.');
+  }
+
+  static fromRecords(records) {
+    if (!Array.isArray(records) || records.length === 0) throw new Error('Stored chain is empty or malformed.');
+    const chain = Object.create(Blockchain.prototype);
+    chain.difficulty = 3;
+    chain.chainFile = null;
+    chain.chain = records.map(record => {
+      if (!record || !Number.isInteger(record.index) || typeof record.timestamp !== 'string' ||
+          typeof record.previousHash !== 'string' || !Number.isSafeInteger(record.nonce) || record.nonce < 0 ||
+          typeof record.hash !== 'string' || !/^[a-f0-9]{64}$/.test(record.hash)) {
+        throw new Error('Stored chain contains a malformed block.');
+      }
+      const block = new Block(record.index, record.timestamp, record.data, record.previousHash);
+      block.nonce = record.nonce;
+      block.hash = record.hash;
+      return block;
+    });
+    if (!chain.isChainValid()) throw new Error('Stored chain is invalid. Restore a trusted backup before starting.');
+    return chain;
   }
 
   createGenesisBlock() {
@@ -55,43 +76,48 @@ class Blockchain {
     newBlock.previousHash = this.getLatestBlock().hash;
     newBlock.mineBlock(this.difficulty);
     this.chain.push(newBlock);
-    this.saveChain();
+    try {
+      this.saveChain();
+    } catch (error) {
+      this.chain.pop();
+      throw error;
+    }
     return newBlock;
   }
 
   isChainValid() {
+    if (!this.chain.length) return false;
+    const genesis = this.chain[0];
+    if (genesis.index !== 0 || genesis.previousHash !== '0' || genesis.hash !== genesis.calculateHash()) return false;
     for (let i = 1; i < this.chain.length; i++) {
       const curr = this.chain[i];
       const prev = this.chain[i - 1];
 
       if (curr.hash !== curr.calculateHash()) return false;
       if (curr.previousHash !== prev.hash) return false;
+      if (curr.index !== i || !curr.hash.startsWith('0'.repeat(this.difficulty))) return false;
     }
     return true;
   }
 
   saveChain() {
-    fs.writeFileSync(CHAIN_FILE, JSON.stringify(this.chain, null, 2), 'utf8');
+    if (!this.chainFile) return;
+    const temporary = this.chainFile + '.tmp';
+    fs.writeFileSync(temporary, JSON.stringify(this.chain, null, 2), { encoding: 'utf8', mode: 0o600 });
+    fs.renameSync(temporary, this.chainFile);
   }
 
   loadChain() {
     try {
-      if (fs.existsSync(CHAIN_FILE)) {
-        const raw = fs.readFileSync(CHAIN_FILE, 'utf8');
+      if (fs.existsSync(this.chainFile)) {
+        const raw = fs.readFileSync(this.chainFile, 'utf8');
         const parsed = JSON.parse(raw);
-        // restore Block prototypes
-        this.chain = parsed.map(b => {
-          const block = new Block(b.index, b.timestamp, b.data, b.previousHash);
-          block.nonce = b.nonce;
-          block.hash = b.hash;
-          return block;
-        });
+        this.chain = Blockchain.fromRecords(parsed).chain;
       } else {
         this.chain = [];
       }
     } catch (err) {
-      console.error('Failed to load chain:', err);
-      this.chain = [];
+      throw new Error('Failed to load chain: ' + err.message);
     }
   }
 }

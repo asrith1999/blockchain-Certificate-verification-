@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="Issue and verify certificates using a persistent local SHA-256 hash chain.">
+  <title>CertChain · Certificate verification</title>
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <main>
+    <header><a class="brand" href="/">◈ CertChain</a><span class="badge">CERTIFICATE REGISTRY</span></header>
+    <section class="intro"><p class="eyebrow">A RECORD YOU CAN CHECK</p><h1>Learning deserves<br>a verifiable record.</h1><p>Verify a certificate ID against this registry’s persistent SHA-256 hash chain.</p></section>
+    <nav aria-label="Sections"><button id="nav-verify" class="active">Verify a certificate</button><button id="nav-admin">Issuer workspace</button></nav>
+    <section id="verify-section" class="card">
+      <h2>Check a certificate</h2><p>Enter the ID provided by the issuer.</p>
+      <form id="verify-form"><label for="verify-id">Certificate ID</label><div class="row"><input id="verify-id" required maxlength="64" autocomplete="off" placeholder="Paste certificate ID"><button>Verify record →</button></div></form>
+      <div id="verify-result" role="status" aria-live="polite"></div>
+      <button id="print-certificate" class="secondary" hidden>Print / Save PDF</button>
+    </section>
+    <section id="admin-section" class="card" hidden>
+      <div id="login-panel"><h2>Issuer access</h2><p>Use the admin access key configured on your server.</p><form id="admin-login"><label for="admin-key">Admin access key</label><input id="admin-key" type="password" required autocomplete="off"><button>Open workspace →</button></form></div>
+      <div id="workspace" hidden>
+        <div class="row spread"><h2>Issue a certificate</h2><button id="logout" class="secondary">Sign out</button></div>
+        <p>Recipient, course, issuer and date will be visible to anyone with this certificate’s ID.</p>
+        <form id="issue-form" class="grid">
+          <label>Recipient full name<input name="recipient" required maxlength="300"></label>
+          <label>Course or programme<input name="course" required maxlength="300"></label>
+          <label>Issuing institution<input name="issuer" required maxlength="300"></label>
+          <label>Date issued<input name="dateIssued" type="date" required></label>
+          <label>Grade (optional)<input name="grade" maxlength="80"></label>
+          <div><button id="issue-submit">Issue and record →</button></div>
+        </form>
+        <div id="issue-result" role="status" aria-live="polite"></div>
+        <div class="row spread"><h2>Issued records</h2><button id="refresh" class="secondary">Refresh</button></div><div id="cert-list"></div>
+      </div>
+      <p id="admin-error" role="alert"></p>
+    </section>
+    <footer>Independent local hash-chain registry. Records are not anchored to Ethereum or another public blockchain. Verification confirms consistency with this registry; it does not independently establish an issuer’s accreditation.</footer>
+  </main>
+</body>
+</html>
